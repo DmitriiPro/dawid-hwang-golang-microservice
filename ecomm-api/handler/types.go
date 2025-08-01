@@ -30,10 +30,10 @@ type ProductRes struct {
 //* ORDERS
 type OrderReq struct {
 	Items         []OrderItem `json:"items"`
-	PaymentMethod string  `json:"payment_method"`
-	TaxPrice      float64 `json:"tax_price"`
-	ShippingPrice float64 `json:"shipping_price"`
-	TotalPrice    float64 `json:"total_price"`
+	PaymentMethod string      `json:"payment_method"`
+	TaxPrice      float64     `json:"tax_price"`
+	ShippingPrice float64     `json:"shipping_price"`
+	TotalPrice    float64     `json:"total_price"`
 }
 
 type OrderItem struct {
@@ -45,13 +45,31 @@ type OrderItem struct {
 }
 
 type OrderRes struct {
-	ID            int64      `json:"id"`
+	ID            int64       `json:"id"`
 	Items         []OrderItem `json:"items"`
-	PaymentMethod string     `json:"payment_method"`
-	TaxPrice      float64    `json:"tax_price"`
-	ShippingPrice float64    `json:"shipping_price"`
-	TotalPrice    float64    `json:"total_price"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     *time.Time `json:"updated_at"`
+	PaymentMethod string      `json:"payment_method"`
+	TaxPrice      float64     `json:"tax_price"`
+	ShippingPrice float64     `json:"shipping_price"`
+	TotalPrice    float64     `json:"total_price"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     *time.Time  `json:"updated_at"`
 }
 
+//* USERS
+
+type UserReq struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	IsAdmin  bool   `json:"is_admin"`
+}
+
+type UserRes struct {
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	IsAdmin bool   `json:"is_admin"`
+}
+
+type ListUserRes struct {
+	Users []UserRes `json:"users"`
+}
