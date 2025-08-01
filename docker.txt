@@ -1,0 +1,42 @@
+запустил докер версию docker pull mysql:9.4.0
+
+docker run --name ecomm-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -d mysql:9.4.0
+
+// Чтобы подключиться к MySQL внутри контейнера, запусти следующую команду из любого терминала:
+docker exec -it ecomm-mysql mysql -uroot -ppassword
+
+// создать базу данных shop как пример
+CREATE DATABASE ecomm;
+
+//  Посмотреть все базы данных:
+SHOW DATABASES;
+
+//перейти в базу данных ecomm
+USE ecomm;
+
+// Посмотреть таблицы в этой базе:
+SHOW TABLES;
+
+//Посмотреть структуру таблицы
+DESCRIBE products;
+
+// в контейнере внутри базы дыннх создали базу данных ecomm но не перешли всам контейнер
+docker exec -i ecomm-mysql mysql -uroot -ppassword <<< "CREATE DATABASE ecomm;"
+
+
+
+
+
+docker ps - показать все контейнеры
+
+docker stop <имя контейнера> - остановить контейнер
+
+docker start <имя контейнера> - запустить контейнер
+
+docker restart <имя контейнера> - перезапустить контейнер
+
+docker ps -a  - показать все контейнеры, включая остановленные
+
+docker rm <имя контейнера> - удалить контейнер
+
+docker rmi <имя образа> - удалить образ

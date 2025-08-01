@@ -1,0 +1,17 @@
+используем golang-migrate
+https://github.com/golang-migrate/migrate?tab=readme-ov-file
+
+можно запустить миграцию в контейнере докер указано docker usage
+
+
+
+
+// запустил команду для миграции в базу данных ecomm
+
+// запускать через power shell команду потому что гитбаш не видит этот путь "${PWD}\db:/db"
+
+
+docker run -it --rm --network host --volume "${PWD}\db:/db" migrate/migrate create -ext sql -dir /db/migrations init_schema
+
+// запуск команды миграции в базу данных ecomm
+docker run -it --rm --network host --volume "${PWD}\db:/db" migrate/migrate -path=/db/migrations -database "mysql://root:password@tcp(localhost:3306)/ecomm" up

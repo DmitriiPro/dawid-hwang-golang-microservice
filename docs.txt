@@ -1,0 +1,17 @@
+// в контейнере внутри базы дыннх создали базу данных ecomm но не перешли всам контейнер
+docker exec -i ecomm-mysql mysql -uroot -ppassword <<< "CREATE DATABASE ecomm;"
+
+после создания базы данных выполним команду миграции 
+
+docker run -it --rm --network host --volume ./db:db/ migrate/migrate -path=/db/migrations -database "mysql://root:password@tcp(localhost:3306)/ecomm" up
+
+
+// миграция сработала через power shell
+docker run -it --rm --network host --volume "${PWD}\db:/db" migrate/migrate -path=/db/migrations -database "mysql://root:password@tcp(localhost:3306)/ecomm" up
+
+
+
+
+https://github.com/jmoiron/sqlx
+
+    
