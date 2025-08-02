@@ -4,7 +4,10 @@ import (
 	"context"
 	"davidHwang/ecomm/ecomm-api/server"
 	"davidHwang/ecomm/ecomm-api/storer"
+	"davidHwang/ecomm/token"
+	"davidHwang/ecomm/util"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,14 +16,16 @@ import (
 )
 
 type handler struct {
-	ctx    context.Context
-	server *server.Server
+	ctx        context.Context
+	server     *server.Server
+	tokenMaker *token.JWTMaker
 }
 
-func NewHandler(server *server.Server) *handler {
+func NewHandler(server *server.Server, secretKey string) *handler {
 	return &handler{
-		ctx:    context.Background(),
-		server: server,
+		ctx:        context.Background(),
+		server:     server,
+		tokenMaker: token.NewJWTMaker(secretKey),
 	}
 }
 
@@ -282,7 +287,6 @@ func (h *handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-
 // delete
 
 func (h *handler) DeleteOrder(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +306,6 @@ func (h *handler) DeleteOrder(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
-
 
 func toStoreOrder(o OrderReq) *storer.Order {
 	return &storer.Order{
@@ -357,4 +360,308 @@ func toOrderItems(items []storer.OrderItem) []OrderItem {
 	}
 
 	return res
+}
+
+//* USERS
+
+func (h *handler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var u UserReq
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	//* hash password
+	hashedPass, err := util.HashPassword(u.Password)
+	if err != nil {
+		http.Error(w, "error hashing password", http.StatusInternalServerError)
+		return
+	}
+	u.Password = hashedPass
+	//* hash password end
+
+	created, err := h.server.CreateUser(h.ctx, toStoreUser(u))
+
+	if err != nil {
+		http.Error(w, "error creating user", http.StatusInternalServerError)
+		return
+	}
+
+	res := toUserRes(created)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(res)
+}
+
+func (h *handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := h.server.ListUsers(h.ctx)
+
+	if err != nil {
+		http.Error(w, "error listing users", http.StatusInternalServerError)
+		return
+	}
+
+	var res ListUserRes
+	for _, u := range users {
+		res.Users = append(res.Users, toUserRes(&u))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+
+}
+
+func (h *handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	var u UserReq
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		http.Error(w, "error decoding request body", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.server.GetUser(h.ctx, u.Email)
+
+	if err != nil {
+		http.Error(w, "error getting user", http.StatusInternalServerError)
+		return
+	}
+
+	//* patch our user request
+	patchUserReq(user, u)
+	updatedUser, err := h.server.UpdateUser(h.ctx, user)
+
+	if err != nil {
+		http.Error(w, "error updating user", http.StatusInternalServerError)
+		return
+	}
+
+	res := toUserRes(updatedUser)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+}
+
+func (h *handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	i, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		http.Error(w, "error parsing ID", http.StatusBadRequest)
+		return
+	}
+	err = h.server.DeleteUser(h.ctx, i)
+	if err != nil {
+		http.Error(w, "error deleting user", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+
+}
+
+func patchUserReq(user *storer.User, u UserReq) {
+	if u.Name != "" {
+		user.Name = u.Name
+	}
+
+	if u.Email != "" {
+		user.Email = u.Email
+	}
+
+	if u.Password != "" {
+		hashed, err := util.HashPassword(u.Password)
+		if err != nil {
+			panic(err)
+		}
+
+		user.Password = hashed
+	}
+
+	if u.IsAdmin {
+		user.IsAdmin = u.IsAdmin
+	}
+
+	user.UpdatedAt = handlerToTimePtr(time.Now())
+
+}
+
+func handlerToTimePtr(t time.Time) *time.Time {
+	return &t
+}
+
+func toUserRes(user *storer.User) UserRes {
+	return UserRes{
+		Name:    user.Name,
+		Email:   user.Email,
+		IsAdmin: user.IsAdmin,
+	}
+}
+
+func toStoreUser(userReq UserReq) *storer.User {
+	return &storer.User{
+		Name:     userReq.Name,
+		Email:    userReq.Email,
+		Password: userReq.Password,
+		IsAdmin:  userReq.IsAdmin,
+	}
+}
+
+//! AUTH USERS
+
+func (h *handler) loginUser(w http.ResponseWriter, r *http.Request) {
+
+	var u LoginUserReq
+
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+		http.Error(w, "error decoding request body", http.StatusBadRequest)
+		return
+	}
+
+	gu, err := h.server.GetUser(h.ctx, u.Email)
+
+	if err != nil {
+		http.Error(w, "error getting user", http.StatusInternalServerError)
+		return
+	}
+
+	err = util.CheckPassword(u.Password, gu.Password)
+
+	if err != nil {
+		http.Error(w, "wrong password", http.StatusUnauthorized)
+		return
+	}
+
+	// * если пароль верный мы можем создать токен и вернуть в качестве ответа
+	//* json web token (jwt)
+
+	accessToken, accessClaims, err := h.tokenMaker.CreateToken(gu.ID, gu.Email, gu.IsAdmin, time.Minute*15)
+
+	if err != nil {
+		http.Error(w, "error creating token", http.StatusInternalServerError)
+		return
+	}
+
+	//* метод для создания токена обновления доступа
+	refreshToken, refreshClaims, err := h.tokenMaker.CreateToken(gu.ID, gu.Email, gu.IsAdmin, time.Hour*24)
+
+	if err != nil {
+		http.Error(w, "error creating token", http.StatusInternalServerError)
+		return
+	}
+
+	//* создать сессию для хранения токена обновления в базе данных
+	session, err := h.server.CreateSession(h.ctx, &storer.Session{
+		ID:           refreshClaims.RegisteredClaims.ID,
+		UserEmail:    gu.Email,
+		RefreshToken: refreshToken,
+		IsRevoked:    false,
+		ExpiresAt:    &refreshClaims.RegisteredClaims.ExpiresAt.Time,
+	})
+
+	if err != nil {
+		log.Printf("Error creating session: %v", err)
+		http.Error(w, "error creating session", http.StatusInternalServerError)
+		return
+	}
+
+	res := LoginUserRes{
+		SessionID:             session.ID,
+		AccessToken:           accessToken,
+		RefreshToken:          refreshToken,
+		AccessTokenExpiresAt:  accessClaims.RegisteredClaims.ExpiresAt.Time,
+		RefreshTokenExpiresAt: refreshClaims.RegisteredClaims.ExpiresAt.Time,
+		User:                  toUserRes(gu),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+
+}
+
+// * бработчик выхода из системы
+func (h *handler) logoutUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "missing session ID", http.StatusBadRequest)
+		return
+	}
+
+	err := h.server.DeleteSession(h.ctx, id)
+	if err != nil {
+		http.Error(w, "error deleting session", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+//* обновления токена доступа
+
+func (h *handler) renewAccessToken(w http.ResponseWriter, r *http.Request) {
+	var req RefreshTokenReq
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "error decoding request body", http.StatusBadRequest)
+		return
+	}
+
+	//* для проверки токена обновления
+	refreshClaims, err := h.tokenMaker.VerifyToken(req.RefreshToken)
+	if err != nil {
+		http.Error(w, "error verifying token", http.StatusUnauthorized)
+		return
+	}
+
+	//* получим сессии из базы данных
+	session, err := h.server.GetSession(h.ctx, refreshClaims.RegisteredClaims.ID)
+
+	if err != nil {
+		http.Error(w, "error getting session", http.StatusInternalServerError)
+		return
+	}
+
+	//* проверим не отозвана ли эта сессия
+	if session.IsRevoked {
+		http.Error(w, "session revoked", http.StatusUnauthorized)
+		return
+	}
+
+	//* проверка совпадает ли адрес электронной почты с адресом в refreshClaims.Email
+	if session.UserEmail != refreshClaims.Email {
+		http.Error(w, "session revoked", http.StatusUnauthorized)
+		return
+	}
+
+	//* получим данные для токена доступа и ошибку
+	accessToken, accessClaims, err := h.tokenMaker.CreateToken(refreshClaims.ID, refreshClaims.Email, refreshClaims.IsAdmin, time.Minute*15)
+
+	if err != nil {
+		http.Error(w, "error creating token", http.StatusInternalServerError)
+		return
+	}
+	//* создадим ответ с токеном доступа
+	res := RenewAccessTokenRes{
+		AccessToken:          accessToken,
+		AccessTokenExpiresAt: accessClaims.RegisteredClaims.ExpiresAt.Time,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
+
+}
+
+//* отзыв токена доступа - отмена сессии
+func (h *handler) revokeSession(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "missing session ID", http.StatusBadRequest)
+		return
+	}
+
+	err := h.server.RevokeSession(h.ctx, id)
+	if err != nil {
+		http.Error(w, "error revoking session", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

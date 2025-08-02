@@ -269,9 +269,9 @@ func (ms *MySQLStorer) CreateUser(ctx context.Context, u *User) (*User, error) {
 
 }
 
-func (ms *MySQLStorer) GetUser(ctx context.Context, id int64) (*User, error) {
+func (ms *MySQLStorer) GetUser(ctx context.Context, email string) (*User, error) {
 	var u User
-	err := ms.db.GetContext(ctx, &u, `SELECT * FROM users WHERE id=?`, id)
+	err := ms.db.GetContext(ctx, &u, `SELECT * FROM users WHERE email=?`, email)
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting user: %w", err)
@@ -291,7 +291,6 @@ func (ms *MySQLStorer) ListUsers(ctx context.Context) ([]User, error) {
 	return users, nil
 }
 
-
 func (ms *MySQLStorer) UpdateUser(ctx context.Context, u *User) (*User, error) {
 	_, err := ms.db.NamedExecContext(ctx, `UPDATE users SET name=:name, email=:email, password=:password, is_admin=:is_admin, updated_at=:updated_at WHERE id=:id`, u)
 
@@ -306,6 +305,50 @@ func (ms *MySQLStorer) DeleteUser(ctx context.Context, id int64) error {
 	_, err := ms.db.ExecContext(ctx, `DELETE FROM users WHERE id=?`, id)
 	if err != nil {
 		return fmt.Errorf("error deleting user: %w", err)
+	}
+
+	return nil
+}
+
+//* SESSIONS
+
+func (ms *MySQLStorer) CreateSession(ctx context.Context, s *Session) (*Session, error) {
+	_, err := ms.db.NamedExecContext(ctx, "INSERT INTO sessions (id, user_email, refresh_token, is_revoked) VALUES (:id, :user_email, :refresh_token, :is_revoked)", s)
+
+	if err != nil {
+		return nil, fmt.Errorf("error creating session: %w", err)
+	}
+
+	return s, nil
+}
+
+func (ms *MySQLStorer) GetSession(ctx context.Context, id string) (*Session, error) {
+	var s Session
+	err := ms.db.GetContext(ctx, &s, "SELECT * FROM sessions WHERE id=?", id)
+
+	if err != nil {
+		return nil, fmt.Errorf("error getting session: %w", err)
+	}
+
+	return &s, nil
+}
+
+// * отмена сессии
+func (ms *MySQLStorer) RevokeSession(ctx context.Context, id string) error {
+	_, err := ms.db.NamedExecContext(ctx, "UPDATE sessions SET is_revoked=1 WHERE id=:id", map[string]interface{}{"id": id})
+
+	if err != nil {
+		return fmt.Errorf("error revoking session: %w", err)
+	}
+
+	return nil
+}
+
+func (ms *MySQLStorer) DeleteSession(ctx context.Context, id string) error {
+	_, err := ms.db.ExecContext(ctx, "DELETE FROM sessions WHERE id=?", id)
+
+	if err != nil {
+		return fmt.Errorf("error deleting session: %w", err)
 	}
 
 	return nil

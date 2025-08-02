@@ -14,4 +14,4 @@ https://github.com/golang-migrate/migrate?tab=readme-ov-file
 docker run -it --rm --network host --volume "${PWD}\db:/db" migrate/migrate create -ext sql -dir /db/migrations init_schema
 
 // запуск команды миграции в базу данных ecomm
-docker run -it --rm --network host --volume "${PWD}\db:/db" migrate/migrate -path=/db/migrations -database "mysql://root:password@tcp(localhost:3306)/ecomm" up
+docker run -it --rm --network host --volume "${PWD}/db:/db" migrate/migrate -path=/db/migrations -database "mysql://root:password@tcp(localhost:3306)/ecomm" up
