@@ -14,4 +14,17 @@ docker run -it --rm --network host --volume ./db:/db migrate/migrate -path=/db/m
 
 https://github.com/jmoiron/sqlx
 
-    
+
+
+/// запуск 
+// 1)
+docker run --name ecomm-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -d mysql:9.4.0
+
+//2) 
+docker exec -i ecomm-mysql mysql -uroot -ppassword <<< "CREATE DATABASE ecomm;"
+// 3)
+docker run -it --rm --network host --volume "${PWD}/db:/db" migrate/migrate -path=/db/migrations -database "mysql://root:password@tcp(localhost:3306)/ecomm" up
+
+
+4) 
+go run cmd/ecomm-api/main.go    

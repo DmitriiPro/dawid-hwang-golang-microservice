@@ -36,8 +36,11 @@ func main() {
 	hdl := handler.NewHandler(srv, *secretKey)
 
 	handler.RegisterRoutes(hdl)
-	handler.Start(":8080")
 
+	err = handler.Start(":8080")
+	if err != nil {
+		log.Fatalf("server failed to start: %v", err)
+	}
 }
 
 //* time 26 : 30
