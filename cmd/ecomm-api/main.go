@@ -1,47 +1,85 @@
 package main
 
 import (
-	"davidHwang/ecomm/db"
 	"davidHwang/ecomm/ecomm-api/handler"
-	"davidHwang/ecomm/ecomm-api/server"
-	"davidHwang/ecomm/ecomm-api/storer"
+	"davidHwang/ecomm/ecomm-grpc/pb"
 	"log"
 
 	"github.com/ianschenck/envflag"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const minSecretKeySize = 32
 
 func main() {
 
-	var secretKey = envflag.String("SECRET_KEY", "01234567890123456789012345678901", "secret key for JWT signing")
+	var (
+		secretKey = envflag.String("SECRET_KEY", "01234567890123456789012345678901", "secret key for JWT signing")
+
+		svcAddr = envflag.String("GRPC_SVC_ADDR", "0.0.0.0:9091", "address where the ecomm-grpc service is listening on")
+	)
 
 	if len(*secretKey) < minSecretKeySize {
 		log.Fatalf("SECRET_KEY must be at least %d characters long", minSecretKeySize)
 	}
 
-	db, err := db.NewDatabase()
+	// db, err := db.NewDatabase()
 
-	if err != nil {
-		log.Fatalf("error opening connection to database: %v", err)
+	// if err != nil {
+	// 	log.Fatalf("error opening connection to database: %v", err)
+	// }
+
+	// defer db.Close()
+
+	// log.Println("successfully connected to database")
+
+	// // do something with the database
+	// st := storer.NewMySQLStorer(db.GetDB())
+	// srv := server.NewServer(st)
+
+	//! Подрубаем GRPC клиент
+
+	// параметр подключения
+	//* WithTransportCredentials - учетные данные траспорта для подключения
+	//* insecure.NewCredentials() - новые учетные данные
+
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	defer db.Close()
+	conn, err := grpc.NewClient(*svcAddr, opts...)
 
-	log.Println("successfully connected to database")
+	if err != nil {
+		log.Fatalf("failedd to connect to server : %v", err)
+	}
 
-	// do something with the database
-	st := storer.NewMySQLStorer(db.GetDB())
-	srv := server.NewServer(st)
-	hdl := handler.NewHandler(srv, *secretKey)
+	defer conn.Close()
 
-	handler.RegisterRoutes(hdl)
+	client := pb.NewEcommClient(conn)
+
+	//! Подрубаем GRPC клиент end
+
+	//* подключение для grpc
+	hdlGRPC := handler.NewHandler(client, *secretKey)
+
+	//* подключение для grpc end
+
+	handler.RegisterRoutes(hdlGRPC)
 
 	err = handler.Start(":8080")
 	if err != nil {
 		log.Fatalf("server failed to start: %v", err)
 	}
-}
 
-//* time 26 : 30
-//* Ep5  https://www.youtube.com/watch?v=HtsEaKuYY2o
+	//* подключение для restapi
+	// hdl := handler.NewHandler(srv, *secretKey)
+	// handler.RegisterRoutes(hdlGRPC)
+
+	// err = handler.Start(":8080")
+	// if err != nil {
+	// 	log.Fatalf("server failed to start: %v", err)
+	// }
+	//* подключение для restapi end
+
+}
